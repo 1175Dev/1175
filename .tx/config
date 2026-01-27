@@ -1,0 +1,7 @@
+[main]
+host = https://www.transifex.com
+
+[o:elevenseventyfive:p:elevenseventyfive:r:qt-translation-025x]
+file_filter = src/qt/locale/elevenseventyfive_<lang>.xlf
+source_file = src/qt/locale/elevenseventyfive_en.xlf
+source_lang = en

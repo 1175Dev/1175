@@ -1,0 +1,93 @@
+#!/sbin/openrc-run
+
+# backward compatibility for existing gentoo layout 
+#
+if [ -d "/var/lib/elevenseventyfive/.elevenseventyfive" ]; then
+	ELEVENSEVENTYFIVED_DEFAULT_DATADIR="/var/lib/elevenseventyfive/.elevenseventyfive"
+else
+	ELEVENSEVENTYFIVED_DEFAULT_DATADIR="/var/lib/elevenseventyfived"
+fi
+
+ELEVENSEVENTYFIVED_CONFIGFILE=${ELEVENSEVENTYFIVED_CONFIGFILE:-/etc/elevenseventyfive/elevenseventyfive.conf}
+ELEVENSEVENTYFIVED_PIDDIR=${ELEVENSEVENTYFIVED_PIDDIR:-/var/run/elevenseventyfived}
+ELEVENSEVENTYFIVED_PIDFILE=${ELEVENSEVENTYFIVED_PIDFILE:-${ELEVENSEVENTYFIVED_PIDDIR}/elevenseventyfived.pid}
+ELEVENSEVENTYFIVED_DATADIR=${ELEVENSEVENTYFIVED_DATADIR:-${ELEVENSEVENTYFIVED_DEFAULT_DATADIR}}
+ELEVENSEVENTYFIVED_USER=${ELEVENSEVENTYFIVED_USER:-${ELEVENSEVENTYFIVE_USER:-elevenseventyfive}}
+ELEVENSEVENTYFIVED_GROUP=${ELEVENSEVENTYFIVED_GROUP:-elevenseventyfive}
+ELEVENSEVENTYFIVED_BIN=${ELEVENSEVENTYFIVED_BIN:-/usr/bin/elevenseventyfived}
+ELEVENSEVENTYFIVED_NICE=${ELEVENSEVENTYFIVED_NICE:-${NICELEVEL:-0}}
+ELEVENSEVENTYFIVED_OPTS="${ELEVENSEVENTYFIVED_OPTS:-${ELEVENSEVENTYFIVE_OPTS}}"
+
+name="ElevenSeventyFive Core Daemon"
+description="ElevenSeventyFive cryptocurrency P2P network daemon"
+
+command="/usr/bin/elevenseventyfived"
+command_args="-pid=\"${ELEVENSEVENTYFIVED_PIDFILE}\" \
+		-conf=\"${ELEVENSEVENTYFIVED_CONFIGFILE}\" \
+		-datadir=\"${ELEVENSEVENTYFIVED_DATADIR}\" \
+		-daemon \
+		${ELEVENSEVENTYFIVED_OPTS}"
+
+required_files="${ELEVENSEVENTYFIVED_CONFIGFILE}"
+start_stop_daemon_args="-u ${ELEVENSEVENTYFIVED_USER} \
+			-N ${ELEVENSEVENTYFIVED_NICE} -w 2000"
+pidfile="${ELEVENSEVENTYFIVED_PIDFILE}"
+
+# The retry schedule to use when stopping the daemon. Could be either
+# a timeout in seconds or multiple signal/timeout pairs (like
+# "SIGKILL/180 SIGTERM/300")
+retry="${ELEVENSEVENTYFIVED_SIGTERM_TIMEOUT}"
+
+depend() {
+	need localmount net
+}
+
+# verify
+# 1) that the datadir exists and is writable (or create it)
+# 2) that a directory for the pid exists and is writable
+# 3) ownership and permissions on the config file
+start_pre() {
+	checkpath \
+	-d \
+	--mode 0750 \
+	--owner "${ELEVENSEVENTYFIVED_USER}:${ELEVENSEVENTYFIVED_GROUP}" \
+	"${ELEVENSEVENTYFIVED_DATADIR}"
+
+	checkpath \
+	-d \
+	--mode 0755 \
+	--owner "${ELEVENSEVENTYFIVED_USER}:${ELEVENSEVENTYFIVED_GROUP}" \
+	"${ELEVENSEVENTYFIVED_PIDDIR}"
+
+	checkpath -f \
+	-o "${ELEVENSEVENTYFIVED_USER}:${ELEVENSEVENTYFIVED_GROUP}" \
+	-m 0660 \
+	"${ELEVENSEVENTYFIVED_CONFIGFILE}"
+
+	checkconfig || return 1
+}
+
+checkconfig()
+{
+	if grep -qs '^rpcuser=' "${ELEVENSEVENTYFIVED_CONFIGFILE}" && \
+		! grep -qs '^rpcpassword=' "${ELEVENSEVENTYFIVED_CONFIGFILE}" ; then
+		eerror ""
+		eerror "ERROR: You must set a secure rpcpassword to run elevenseventyfived."
+		eerror "The setting must appear in ${ELEVENSEVENTYFIVED_CONFIGFILE}"
+		eerror ""
+		eerror "This password is security critical to securing wallets "
+		eerror "and must not be the same as the rpcuser setting."
+		eerror "You can generate a suitable random password using the following "
+		eerror "command from the shell:"
+		eerror ""
+		eerror "bash -c 'tr -dc a-zA-Z0-9 < /dev/urandom | head -c32 && echo'"
+		eerror ""
+		eerror "It is recommended that you also set alertnotify so you are "
+		eerror "notified of problems:"
+		eerror ""
+		eerror "ie: alertnotify=echo %%s | mail -s \"ElevenSeventyFive Alert\"" \
+			"admin@foo.com"
+		eerror ""
+		return 1
+	fi
+}
