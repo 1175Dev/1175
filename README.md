@@ -39,69 +39,72 @@ https://opensource.org/licenses/MIT.
 Building from source
 --------------------
 
-ElevenSeventyFive Core uses CMake. After a build, the binaries are in
-`build/bin/`: `elevenseventyfived` (daemon), `elevenseventyfive-qt` (GUI wallet),
-`elevenseventyfive-cli`, `-tx`, `-util` and `-wallet`. More detailed per-platform
-notes are in the [doc](/doc) folder.
+ElevenSeventyFive Core builds **all** of its library dependencies (Boost,
+libevent, SQLite, Berkeley DB, Qt, ...) from source with its own
+[depends system](/depends). This keeps builds reproducible, so you do **not**
+install those libraries on your machine — only a small base toolchain. After a
+build, the binaries are in `build/bin/`: `elevenseventyfived` (daemon),
+`elevenseventyfive-qt` (GUI wallet), `elevenseventyfive-cli`, `-tx`, `-util` and
+`-wallet`.
 
-### Linux (Debian / Ubuntu)
+### 1. Base toolchain
+
+Only a compiler and build tools are needed — the libraries come from depends.
+
+Debian / Ubuntu:
 
 ```sh
 sudo apt update
-sudo apt install build-essential cmake pkgconf python3 libevent-dev libboost-dev
-
-# optional: descriptor wallet (SQLite), GUI (Qt6) and QR support
-sudo apt install libsqlite3-dev qt6-base-dev qt6-tools-dev libqrencode-dev
-
-cmake -B build
-cmake --build build -j"$(nproc)"
+sudo apt install build-essential cmake pkgconf python3 curl bison
 ```
 
-For legacy (Berkeley DB 4.8) wallet support and static / reproducible binaries,
-build the dependencies first with the [depends system](/depends), then point the
-build at its toolchain:
-
-```sh
-make -C depends -j"$(nproc)"
-cmake -B build --toolchain "$PWD/depends/x86_64-pc-linux-gnu/toolchain.cmake"
-cmake --build build -j"$(nproc)"
-```
-
-(Adjust `x86_64-pc-linux-gnu` to your host triple if you are not on 64-bit x86.)
-
-### macOS
-
-Install the Xcode command line tools and [Homebrew](https://brew.sh):
+macOS (Xcode command line tools + [Homebrew](https://brew.sh)):
 
 ```sh
 xcode-select --install
-brew install cmake boost libevent pkgconf
-
-# optional: descriptor wallet, GUI and QR support
-brew install sqlite qt@6 qrencode
-
-cmake -B build
-cmake --build build -j"$(sysctl -n hw.ncpu)"
+brew install cmake pkgconf
 ```
 
-### Windows
-
-Windows binaries are cross-compiled from Linux (or WSL) with mingw-w64 and the
-depends system. On Debian / Ubuntu:
+For a Windows (cross) build, also add the mingw-w64 toolchain and select the
+POSIX threading variant (Core requires it):
 
 ```sh
-sudo apt install build-essential cmake pkgconf python3 g++-mingw-w64-x86-64-posix
-# select the POSIX threading variant if prompted (Core requires it):
+sudo apt install g++-mingw-w64-x86-64-posix
 sudo update-alternatives --config x86_64-w64-mingw32-g++    # choose the *-posix entry
+```
 
-# build all Windows dependencies (Boost, libevent, SQLite, Berkeley DB, Qt, ...)
-make -C depends HOST=x86_64-w64-mingw32 -j"$(nproc)"
+### 2. Build the dependencies with depends
 
+This compiles every library from source into `depends/<host>/` — reproducibly,
+without touching your system:
+
+```sh
+make -C depends -j"$(nproc)"                              # Linux / macOS (native)
+# or cross-compile for Windows:
+#   make -C depends HOST=x86_64-w64-mingw32 -j"$(nproc)"
+```
+
+See [depends/README.md](/depends/README.md) for other HOST triplets and options
+(e.g. `NO_QT=1`, `NO_WALLET=1`).
+
+### 3. Build ElevenSeventyFive Core against depends
+
+Point CMake at the toolchain that depends generated, then build:
+
+```sh
+cmake -B build --toolchain "$PWD/depends/$(depends/config.guess)/toolchain.cmake"
+cmake --build build -j"$(nproc)"
+```
+
+For a Windows cross build, use the mingw toolchain instead:
+
+```sh
 cmake -B build --toolchain "$PWD/depends/x86_64-w64-mingw32/toolchain.cmake"
 cmake --build build -j"$(nproc)"
 ```
 
-The resulting `.exe` files are in `build/bin/`.
+The wallet (both descriptor/SQLite and legacy/Berkeley DB) and the GUI are built
+when depends provides them, which it does by default.
 
 Testing
 -------
