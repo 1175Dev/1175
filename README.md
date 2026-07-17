@@ -36,13 +36,72 @@ ElevenSeventyFive Core is released under the terms of the MIT license. See
 [COPYING](COPYING) for more information or see
 https://opensource.org/licenses/MIT.
 
-Building
---------
+Building from source
+--------------------
 
-The `master` branch is the current release series. Build instructions for each
-platform are in the [doc](/doc) folder (`doc/build-unix.md`,
-`doc/build-windows.md`, `doc/build-osx.md`). Dependencies can be built
-reproducibly with the [depends system](/depends).
+ElevenSeventyFive Core uses CMake. After a build, the binaries are in
+`build/bin/`: `elevenseventyfived` (daemon), `elevenseventyfive-qt` (GUI wallet),
+`elevenseventyfive-cli`, `-tx`, `-util` and `-wallet`. More detailed per-platform
+notes are in the [doc](/doc) folder.
+
+### Linux (Debian / Ubuntu)
+
+```sh
+sudo apt update
+sudo apt install build-essential cmake pkgconf python3 libevent-dev libboost-dev
+
+# optional: descriptor wallet (SQLite), GUI (Qt6) and QR support
+sudo apt install libsqlite3-dev qt6-base-dev qt6-tools-dev libqrencode-dev
+
+cmake -B build
+cmake --build build -j"$(nproc)"
+```
+
+For legacy (Berkeley DB 4.8) wallet support and static / reproducible binaries,
+build the dependencies first with the [depends system](/depends), then point the
+build at its toolchain:
+
+```sh
+make -C depends -j"$(nproc)"
+cmake -B build --toolchain "$PWD/depends/x86_64-pc-linux-gnu/toolchain.cmake"
+cmake --build build -j"$(nproc)"
+```
+
+(Adjust `x86_64-pc-linux-gnu` to your host triple if you are not on 64-bit x86.)
+
+### macOS
+
+Install the Xcode command line tools and [Homebrew](https://brew.sh):
+
+```sh
+xcode-select --install
+brew install cmake boost libevent pkgconf
+
+# optional: descriptor wallet, GUI and QR support
+brew install sqlite qt@6 qrencode
+
+cmake -B build
+cmake --build build -j"$(sysctl -n hw.ncpu)"
+```
+
+### Windows
+
+Windows binaries are cross-compiled from Linux (or WSL) with mingw-w64 and the
+depends system. On Debian / Ubuntu:
+
+```sh
+sudo apt install build-essential cmake pkgconf python3 g++-mingw-w64-x86-64-posix
+# select the POSIX threading variant if prompted (Core requires it):
+sudo update-alternatives --config x86_64-w64-mingw32-g++    # choose the *-posix entry
+
+# build all Windows dependencies (Boost, libevent, SQLite, Berkeley DB, Qt, ...)
+make -C depends HOST=x86_64-w64-mingw32 -j"$(nproc)"
+
+cmake -B build --toolchain "$PWD/depends/x86_64-w64-mingw32/toolchain.cmake"
+cmake --build build -j"$(nproc)"
+```
+
+The resulting `.exe` files are in `build/bin/`.
 
 Testing
 -------
