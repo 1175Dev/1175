@@ -11,7 +11,7 @@
   </array>
 
   <key>CFBundleIconFile</key>
-  <string>bitcoin.icns</string>
+  <string>elevenseventyfive.icns</string>
 
   <key>CFBundlePackageType</key>
   <string>APPL</string>
@@ -34,7 +34,7 @@
   <string>????</string>
 
   <key>CFBundleExecutable</key>
-  <string>Bitcoin-Qt</string>
+  <string>ElevenSeventyFive-Qt</string>
 
   <key>CFBundleName</key>
   <string>ElevenSeventyFive-Qt</string>

@@ -10,7 +10,7 @@
 
 #include <cassert>
 
-static constexpr auto MAX_DIGITS_BTC = 16;
+static constexpr auto MAX_DIGITS_ESF = 16;
 
 ElevenSeventyFiveUnits::ElevenSeventyFiveUnits(QObject *parent):
         QAbstractListModel(parent),
@@ -94,7 +94,7 @@ QString ElevenSeventyFiveUnits::format(Unit unit, const CAmount& nIn, bool fPlus
     qint64 quotient = n_abs / coin;
     QString quotient_str = QString::number(quotient);
     if (justify) {
-        quotient_str = quotient_str.rightJustified(MAX_DIGITS_BTC - num_decimals, ' ');
+        quotient_str = quotient_str.rightJustified(MAX_DIGITS_ESF - num_decimals, ' ');
     }
 
     // Use SI-style thin space separators as these are locale independent and can't be

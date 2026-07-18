@@ -86,10 +86,6 @@ public:
         consensus.signet_blocks = false;
         consensus.signet_challenge.clear();
         consensus.nSubsidyHalvingInterval = 210000;
-        consensus.script_flag_exceptions.emplace( // BIP16 exception
-            uint256{"00000000000002dc756eebf4f49723ed8d30cc28a5f108eb94b1ba88ac4f9c22"}, SCRIPT_VERIFY_NONE);
-        consensus.script_flag_exceptions.emplace( // Taproot exception
-            uint256{"0000000000000000000f14c35b2d841e986ab5441de8c585d5ffe55ea1e395ad"}, SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_WITNESS);
         consensus.BIP34Height = 0;
         consensus.BIP34Hash = uint256();
         consensus.BIP65Height = 0;
@@ -126,8 +122,8 @@ public:
         // below the current live tip 31729 — reachable by the honest chain, blocks
         // low-work fake chains during sync.
         consensus.nMinimumChainWork = uint256{"000000000000000000000000000000000000000000000109f062107f9082c503"};
-        // Block 31729 (current live tip; validated by full IBD of the live chain 2026-07-15)
-        consensus.defaultAssumeValid = uint256{"0000000000000004aacd6357a54d79de573a39548ee8e08284b86f3ead2a6a74"};
+        // Block 31732 — last pre-fork block and the ASERT anchor (checkpointed below).
+        consensus.defaultAssumeValid = uint256{"0000000000000009365029f0950329bd83e3bd439b7542b221a5b635fb12a3e0"};
 
         // AuxPoW: chain ID = 1175, activates at the v29 hard-fork height 31733.
         // The live v25.1 chain ran the legacy 1175-block DAA to its tip (31729) and never
@@ -141,29 +137,32 @@ public:
 
         // ASERT (aserti3-2d, BCHN standard): activates at block 31733 alongside AuxPoW.
         // Half-life = 3600s (1 hour) — fast difficulty response for a young, low-hashrate
-        // chain (BCH2 uses this same 1-hour value in its early ASERT phase). Anchor = block 31729.
-        // nPrevBlockTime is SMOOTHED to time(31729) - one spacing rather than block
-        // 31728's real timestamp. Block 31729 was mined ~7 days after 31728 (the parked
-        // gap); feeding ASERT the real 31728 time would make it read that gap as "chain
-        // fell behind" and open the fork ~11x too easy. Using 1784157876 (block 31729's
-        // own time) - 600 makes the anchor on-schedule, so the first post-fork ASERT
-        // target equals the anchor difficulty (0x190d1fce) instead of easing. Blocks
-        // below the activation height replay under the legacy DAA and never consult this
-        // anchor, so this value only affects targets at/after height 31733.
-        // Note: the first ASERT target also depends on the real timestamps of the pre-
-        // activation blocks 31730-31732 (mined under the legacy DAA); an unusually early
-        // or late block 31732 shifts that first target, but it self-corrects within one
-        // block.
+        // chain (BCH2 uses this same 1-hour value in its early ASERT phase).
+        //
+        // Anchor = block 31732, the IMMEDIATE PARENT of the first ASERT block (31733).
+        // An earlier revision anchored at 31729 (the tip when this binary was first cut),
+        // assuming activation would follow within a spacing or two. Instead the chain sat
+        // idle ~60h between 31729 (t=1784157876) and 31731 (t=1784376247); at activation
+        // ASERT read that dormant gap as ~60h of "falling behind" and clamped block 31733
+        // to powLimit, collapsing difficulty. Anchoring at 31732 eliminates the gap: with
+        // nHeightDiff = 31732 - 31732 = 0 for block 31733, and nPrevBlockTime set to
+        // time(31732) - one spacing, the ASERT exponent at 31733 is exactly 0, so the
+        // first post-fork target equals the anchor difficulty (0x190d1fce, the last legacy
+        // retarget value) and ASERT then tracks the true 600s equilibrium. Blocks below
+        // the activation height replay under the legacy DAA and never consult this anchor.
         consensus.nASERTActivationHeight = 31733;
         consensus.nASERTHalfLife = 60 * 60; // 3600s (1 hour)
         consensus.asertAnchorParams = Consensus::Params::ASERTAnchor{
-            31729,      // nHeight        — block 31729 (live tip, full-IBD verified)
-            0x190d1fce, // nBits          — block 31729 bits (legacy retarget value)
-            1784157276, // nPrevBlockTime — SMOOTHED: block 31729 time (1784157876) - 600s spacing
+            31732,      // nHeight        — parent of the first ASERT block 31733 (heightDiff = 0)
+            0x190d1fce, // nBits          — block 31732 bits (last legacy retarget value)
+            1784376071, // nPrevBlockTime — SYNTHETIC: block 31732 time (1784376671) - 600s spacing
         };
         // ASERT and AuxPoW must co-activate to avoid any block receiving a legacy-DAA
         // target while being merged-mined (or vice-versa).
         assert(consensus.nASERTActivationHeight == consensus.nAuxpowStartHeight);
+        // The anchor must be the immediate parent of the first ASERT block, so the first
+        // post-fork target is computed on-schedule (heightDiff 0) instead of off a stale gap.
+        assert(consensus.asertAnchorParams->nHeight == consensus.nASERTActivationHeight - 1);
 
         /**
          * The message start string is designed to be unlikely to occur in normal data.
@@ -207,7 +206,10 @@ public:
 
         checkpointData = {
             {
-                { 0, uint256{"000009975e72bc3c40def7d28fefc84195c30b44f84132d165e38983ea8a3fa6"}},
+                {     0, uint256{"000009975e72bc3c40def7d28fefc84195c30b44f84132d165e38983ea8a3fa6"}},
+                // Pre-fork history locked so no node can re-org below the ASERT anchor.
+                { 31729, uint256{"0000000000000004aacd6357a54d79de573a39548ee8e08284b86f3ead2a6a74"}},
+                { 31732, uint256{"0000000000000009365029f0950329bd83e3bd439b7542b221a5b635fb12a3e0"}},
             }
         };
 
@@ -234,8 +236,6 @@ public:
         consensus.signet_blocks = false;
         consensus.signet_challenge.clear();
         consensus.nSubsidyHalvingInterval = 210000;
-        consensus.script_flag_exceptions.emplace( // BIP16 exception
-            uint256{"00000000dd30457c001f4095d208cc1296b0eed002427aa599874af7a432b105"}, SCRIPT_VERIFY_NONE);
         // Set all buried deployments to height 1 (always active from near-genesis).
         // The prior values (21111, 330776, etc.) were Bitcoin testnet3 heights that
         // ESF testnet will never organically reach, making BIP34/65/66/CSV permanently
@@ -532,7 +532,7 @@ public:
             // TODO to be specified in a future patch.
         };
 
-        base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,48); // distinct from testnet(51) and mainnet
+        base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,48); // distinct from mainnet(51) and testnet(111)
         base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,47);
         base58Prefixes[SECRET_KEY] =     std::vector<unsigned char>(1,176);
         base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x35, 0x87, 0xCF};

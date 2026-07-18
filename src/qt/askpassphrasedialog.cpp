@@ -103,7 +103,7 @@ void AskPassphraseDialog::accept()
         }
         QMessageBox msgBoxConfirm(QMessageBox::Question,
                                   tr("Confirm wallet encryption"),
-                                  tr("Warning: If you encrypt your wallet and lose your passphrase, you will <b>LOSE ALL OF YOUR BITCOINS</b>!") + "<br><br>" + tr("Are you sure you wish to encrypt your wallet?"),
+                                  tr("Warning: If you encrypt your wallet and lose your passphrase, you will <b>LOSE ALL OF YOUR ELEVENSEVENTYFIVES</b>!") + "<br><br>" + tr("Are you sure you wish to encrypt your wallet?"),
                                   QMessageBox::Cancel | QMessageBox::Yes, this);
         msgBoxConfirm.button(QMessageBox::Yes)->setText(tr("Continue"));
         msgBoxConfirm.button(QMessageBox::Cancel)->setText(tr("Back"));

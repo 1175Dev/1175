@@ -24,7 +24,7 @@ endif()
 #=============================
 set(CLIENT_NAME "ElevenSeventyFive")
 set(CLIENT_VERSION_MAJOR 29)
-set(CLIENT_VERSION_MINOR 0)
+set(CLIENT_VERSION_MINOR 1)
 set(CLIENT_VERSION_BUILD 0)
 set(CLIENT_VERSION_RC 0)
 set(CLIENT_VERSION_IS_RELEASE "true")
@@ -48,8 +48,8 @@ set(CMAKE_TRY_COMPILE_PLATFORM_VARIABLES
 
 project(BitcoinCore
   VERSION ${CLIENT_VERSION_MAJOR}.${CLIENT_VERSION_MINOR}.${CLIENT_VERSION_BUILD}
-  DESCRIPTION "Bitcoin client software"
-  HOMEPAGE_URL "https://bitcoincore.org/"
+  DESCRIPTION "ElevenSeventyFive client software"
+  HOMEPAGE_URL "https://github.com/1175Dev/1175"
   LANGUAGES NONE
 )
 

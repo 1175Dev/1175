@@ -1355,9 +1355,9 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
     // Warn about relative -datadir path.
     if (args.IsArgSet("-datadir") && !args.GetPathArg("-datadir").is_absolute()) {
         LogPrintf("Warning: relative datadir option '%s' specified, which will be interpreted relative to the "
-                  "current working directory '%s'. This is fragile, because if bitcoin is started in the future "
+                  "current working directory '%s'. This is fragile, because if 1175 is started in the future "
                   "from a different location, it will be unable to locate the current data files. There could "
-                  "also be data loss if bitcoin is started while in a temporary directory.\n",
+                  "also be data loss if 1175 is started while in a temporary directory.\n",
                   args.GetArg("-datadir", ""), fs::PathToString(fs::current_path()));
     }
 
@@ -1832,6 +1832,35 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
 
     node.background_init_thread = std::thread(&util::TraceThread, "initload", [=, &chainman, &args, &node] {
         ScheduleBatchPriority();
+
+        // One-time transition guard for the v29.1 difficulty re-anchor (mainnet only). A node
+        // upgraded in place from a pre-re-anchor binary can load a tip on the collapsed powLimit
+        // chain: its block at the ASERT activation height carries nBits != the re-anchored value
+        // (the block-index load path does not re-check difficulty against GetNextWorkRequired).
+        // Invalidate that block so the node rolls back to the anchor's parent and re-syncs the
+        // correct chain automatically, with no manual -reindex. The re-mined block has the
+        // re-anchored nBits and is untouched; other networks and fresh syncs never match.
+        if (chainman.GetParams().GetChainType() == ChainType::MAIN &&
+            chainman.GetConsensus().asertAnchorParams.has_value()) {
+            const int activation{chainman.GetConsensus().nASERTActivationHeight};
+            const uint32_t required{chainman.GetConsensus().asertAnchorParams->nBits};
+            Chainstate& cs{chainman.ActiveChainstate()};
+            CBlockIndex* bad{nullptr};
+            std::string badhash;
+            {
+                LOCK(::cs_main);
+                CBlockIndex* b{cs.m_chain[activation]};
+                if (b && b->nBits != required) { bad = b; badhash = b->GetBlockHash().ToString(); }
+            }
+            if (bad) {
+                LogPrintf("Transition guard: active tip is on the pre-re-anchor powLimit chain; invalidating block %d (%s) to roll back to the re-anchored chain.\n", activation, badhash);
+                BlockValidationState state;
+                if (!cs.InvalidateBlock(state, bad)) {
+                    LogPrintf("Transition guard: InvalidateBlock failed: %s\n", state.ToString());
+                }
+            }
+        }
+
         // Import blocks and ActivateBestChain()
         ImportBlocks(chainman, vImportFiles);
         if (args.GetBoolArg("-stopafterblockimport", DEFAULT_STOPAFTERBLOCKIMPORT)) {

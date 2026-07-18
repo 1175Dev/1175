@@ -264,10 +264,11 @@ BOOST_AUTO_TEST_CASE(calcnextwork_overflow_guard)
 }
 
 // Verify GetNextWorkRequired selects the correct DAA at the ASERT activation boundary.
-// Uses the LIVE mainnet params (activation height 31733, anchor at height 31729) so the
+// Uses the LIVE mainnet params (activation height 31733, anchor at height 31732) so the
 // test tracks the shipped chainparams instead of a hardcoded pre-fork boundary.
 //   nNextHeight 31732 -> legacy (below activation; not a retarget boundary, nBits unchanged)
-//   nNextHeight 31733 -> first ASERT block; on-schedule -> target equals anchor target
+//   nNextHeight 31733 -> first ASERT block; the anchor IS its parent (heightDiff 0), so
+//                        on-schedule the target EQUALS the anchor difficulty 0x190d1fce (327M)
 //   nNextHeight 31734 -> ASERT continues; one block behind -> target easier (<= powLimit)
 BOOST_AUTO_TEST_CASE(ASERT_activation_boundary)
 {
@@ -278,33 +279,34 @@ BOOST_AUTO_TEST_CASE(ASERT_activation_boundary)
     // Pin the boundary this test targets to the live params so it fails loudly (rather
     // than silently resolving via the legacy DAA) if activation/anchor heights move.
     BOOST_REQUIRE_EQUAL(consensus.nASERTActivationHeight, 31733);
-    BOOST_REQUIRE_EQUAL(anchor.nHeight, 31729);
+    BOOST_REQUIRE_EQUAL(anchor.nHeight, 31732);      // anchor = parent of the first ASERT block
+    BOOST_REQUIRE_EQUAL(anchor.nBits, 0x190d1fceU);  // last legacy retarget value (~327M)
 
     // --- nNextHeight=31732: legacy, below activation and not a retarget boundary ---
     {
         CBlockIndex pindexLast;
         pindexLast.nHeight = 31731;  // nNextHeight = 31732
         pindexLast.nBits   = anchor.nBits;
-        pindexLast.nTime   = anchor.nPrevBlockTime + (31731 - anchor.nHeight + 1) * 600;
+        pindexLast.nTime   = anchor.nPrevBlockTime;
         BOOST_REQUIRE(!consensus.IsASERTActive(31732));
         unsigned int result = GetNextWorkRequired(&pindexLast, nullptr, consensus);
         BOOST_CHECK_EQUAL(result, pindexLast.nBits);  // legacy, no retarget -> nBits unchanged
     }
 
     // --- nNextHeight=31733: first ASERT block ---
-    // On-schedule (exponent=0) -> result must equal anchor nBits. This actually drives
-    // GetNextASERTWorkRequired; the legacy path is not taken at or above activation.
+    // The anchor IS block 31733's parent (heightDiff = 31732 - 31732 = 0). On-schedule the
+    // parent's time is exactly anchor.nPrevBlockTime + one spacing, so exponent = 0 and the
+    // required target equals the anchor difficulty EXACTLY: 0x190d1fce == 327M. This is the
+    // re-anchor fix restarting the fork at the last legacy difficulty rather than powLimit.
     {
         CBlockIndex pindexLast;
         pindexLast.nHeight = 31732;  // nNextHeight = 31733
         BOOST_REQUIRE(consensus.IsASERTActive(31733));
-        // nHeightDiff = 31732 - 31729 = 3; on-schedule: nTimeDiff = (3+1)*600 = 2400
-        pindexLast.nTime = anchor.nPrevBlockTime + 2400;
+        // nHeightDiff = 31732 - 31732 = 0; on-schedule: nTimeDiff = (0+1)*600 = 600
+        pindexLast.nTime = anchor.nPrevBlockTime + 600;  // = 1784376671 = real time(31732)
         pindexLast.nBits = anchor.nBits;
         unsigned int result = GetNextWorkRequired(&pindexLast, nullptr, consensus);
-        arith_uint256 refTarget;
-        refTarget.SetCompact(anchor.nBits);
-        BOOST_CHECK_EQUAL(result, refTarget.GetCompact());
+        BOOST_CHECK_EQUAL(result, 0x190d1fceU);          // exactly 327M, NOT powLimit
     }
 
     // --- nNextHeight=31734: second ASERT block, one spacing behind schedule ---
@@ -312,8 +314,8 @@ BOOST_AUTO_TEST_CASE(ASERT_activation_boundary)
     {
         CBlockIndex pindexLast;
         pindexLast.nHeight = 31733;  // nNextHeight = 31734
-        // nHeightDiff = 31733 - 31729 = 4; one block behind: nTimeDiff = (4+1)*600 + 600 = 3600
-        pindexLast.nTime = anchor.nPrevBlockTime + 3600;
+        // nHeightDiff = 31733 - 31732 = 1; one block behind: nTimeDiff = (1+1)*600 + 600 = 1800
+        pindexLast.nTime = anchor.nPrevBlockTime + 1800;
         pindexLast.nBits = anchor.nBits;
         unsigned int result = GetNextWorkRequired(&pindexLast, nullptr, consensus);
         arith_uint256 refTarget;
@@ -322,6 +324,32 @@ BOOST_AUTO_TEST_CASE(ASERT_activation_boundary)
         resultTarget.SetCompact(result);
         BOOST_CHECK(resultTarget >= refTarget);
         BOOST_CHECK(resultTarget <= UintToArith256(consensus.powLimit));
+    }
+}
+
+// Verify the difficulty does NOT collapse after the fork opens. The original crash was a
+// one-time anchor artifact (anchor pointed ~60h before activation), not a response to real
+// block times. With the anchor adjacent to activation, blocks mined on schedule (600s) sit
+// at exponent 0 and hold the anchor difficulty (327M) indefinitely -- the crash cannot recur
+// under normal mining. Drives the REAL GetNextWorkRequired with live mainnet params.
+BOOST_AUTO_TEST_CASE(ASERT_post_activation_stable)
+{
+    const auto chainParams = CreateChainParams(*m_node.args, ChainType::MAIN);
+    const Consensus::Params& consensus = chainParams->GetConsensus();
+    BOOST_REQUIRE(consensus.asertAnchorParams.has_value());
+    const auto& anchor = *consensus.asertAnchorParams;
+
+    // On-schedule: parent time(h) = anchorPrevTime + spacing*(h - anchorHeight + 1), so every
+    // post-activation block sees exponent 0. Drive 40 consecutive blocks (31733..31772).
+    for (int h = anchor.nHeight; h < anchor.nHeight + 40; ++h) {
+        CBlockIndex pindexLast;
+        pindexLast.nHeight = h;
+        pindexLast.nBits   = anchor.nBits;
+        pindexLast.nTime   = anchor.nPrevBlockTime
+                             + int64_t(h - anchor.nHeight + 1) * consensus.nPowTargetSpacing;
+        BOOST_REQUIRE(consensus.IsASERTActive(h + 1));
+        unsigned int bits = GetNextWorkRequired(&pindexLast, nullptr, consensus);
+        BOOST_CHECK_EQUAL(bits, anchor.nBits);   // stays 327M every block; never drifts to powLimit
     }
 }
 
