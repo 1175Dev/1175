@@ -109,14 +109,35 @@ def base58_to_byte(s):
     return res[1:-4], int(res[0])
 
 
+# 1175 base58 version bytes per network. Unlike upstream Bitcoin (where testnet,
+# signet and regtest all share one encoding), 1175 gives every network distinct
+# version bytes, so the base58/WIF helpers must know which non-main network a test
+# runs on. They default to regtest; tests on another network call set_chain() (the
+# test framework does this automatically from self.chain during setup).
+CHAIN_B58_VERSIONS = {
+    "main":    {"pubkey": 51,  "script": 50,  "wif": 178},
+    "test":    {"pubkey": 111, "script": 196, "wif": 239},
+    "signet":  {"pubkey": 48,  "script": 47,  "wif": 176},
+    "regtest": {"pubkey": 100, "script": 196, "wif": 240},
+}
+_non_main_chain = "regtest"
+
+def set_chain(chain):
+    """Select which non-main network the 'main=False' base58/WIF helpers encode for."""
+    global _non_main_chain
+    _non_main_chain = "main" if chain in ("", "main") else chain
+
+def chain_b58_versions():
+    return CHAIN_B58_VERSIONS[_non_main_chain]
+
 def keyhash_to_p2pkh(hash, main=False):
     assert len(hash) == 20
-    version = 51 if main else 100  # 1175: MAIN P2PKH=51, REGTEST P2PKH=100
+    version = 51 if main else chain_b58_versions()["pubkey"]
     return byte_to_base58(hash, version)
 
 def scripthash_to_p2sh(hash, main=False):
     assert len(hash) == 20
-    version = 50 if main else 196  # 1175: MAIN P2SH=50, REGTEST/TESTNET P2SH=196
+    version = 50 if main else chain_b58_versions()["script"]
     return byte_to_base58(hash, version)
 
 def key_to_p2pkh(key, main=False):

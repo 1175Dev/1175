@@ -6,7 +6,7 @@
 
 from decimal import Decimal
 
-from test_framework.test_framework import BitcoinTestFramework
+from test_framework.test_framework import BitcoinTestFramework, SkipTest
 from test_framework.util import assert_equal
 
 SIGNET_DEFAULT_CHALLENGE = '512103ad5e0edad18cb1f0fc0d28a3d4f1f3e445640337489abb10404f2d1e086be430210359ef5021964fe22d6f8e05b2463c9540ce96883fe3b278760f048f5189f2e6c452ae'
@@ -52,6 +52,15 @@ class SignetBasicTest(BitcoinTestFramework):
             self.signets[1].shared_args, self.signets[1].shared_args,
             self.signets[2].shared_args, self.signets[2].shared_args,
         ]
+
+    def skip_test_if_missing_module(self):
+        # This test validates pregenerated signet blocks that are Bitcoin-signet vectors:
+        # they are signed with the secret default-challenge key (held only by Bitcoin's
+        # signet maintainers) and chained to Bitcoin's signet genesis, so they cannot be
+        # reproduced for 1175 (which has its own signet genesis and gives signet distinct
+        # base58/params). The test framework is now chain-aware (see address.set_chain), so
+        # this becomes enable-able once a 1175-specific signet block set exists.
+        raise SkipTest("no 1175-specific signet block vectors (Bitcoin-signet vectors need a non-public signing key)")
 
     def setup_network(self):
         self.setup_nodes()

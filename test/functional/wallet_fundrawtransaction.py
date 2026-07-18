@@ -304,7 +304,7 @@ class RawTransactionsTest(BitcoinTestFramework):
         dec_tx  = self.nodes[2].decoderawtransaction(rawtx)
         assert_equal(utx['txid'], dec_tx['vin'][0]['txid'])
 
-        assert_raises_rpc_error(-5, "Change address must be a valid bitcoin address", self.nodes[2].fundrawtransaction, rawtx, changeAddress='foobar')
+        assert_raises_rpc_error(-5, "Change address must be a valid 1175 address", self.nodes[2].fundrawtransaction, rawtx, changeAddress='foobar')
 
     def test_valid_change_address(self):
         self.log.info("Test fundrawtxn with a provided change address")
@@ -872,7 +872,7 @@ class RawTransactionsTest(BitcoinTestFramework):
         node.fundrawtransaction(rawtx, feeRate=0.00000999, add_inputs=True)
 
         self.log.info("- raises RPC error if both feeRate and fee_rate are passed")
-        assert_raises_rpc_error(-8, "Cannot specify both fee_rate (sat/vB) and feeRate (BTC/kvB)",
+        assert_raises_rpc_error(-8, "Cannot specify both fee_rate (sat/vB) and feeRate (ESF/kvB)",
             node.fundrawtransaction, rawtx, fee_rate=0.1, feeRate=0.1, add_inputs=True)
 
         self.log.info("- raises RPC error if both feeRate and estimate_mode passed")
@@ -915,7 +915,7 @@ class RawTransactionsTest(BitcoinTestFramework):
         outputs = {self.nodes[2].getnewaddress(): 1}
         rawtx = self.nodes[3].createrawtransaction(inputs, outputs)
 
-        # Test subtract fee from outputs with feeRate (BTC/kvB)
+        # Test subtract fee from outputs with feeRate (ESF/kvB)
         result = [self.nodes[3].fundrawtransaction(rawtx),  # uses self.min_relay_tx_fee (set by settxfee)
             self.nodes[3].fundrawtransaction(rawtx, subtractFeeFromOutputs=[]),  # empty subtraction list
             self.nodes[3].fundrawtransaction(rawtx, subtractFeeFromOutputs=[0]),  # uses self.min_relay_tx_fee (set by settxfee)

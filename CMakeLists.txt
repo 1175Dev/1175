@@ -59,8 +59,9 @@ if(CLIENT_VERSION_RC GREATER 0)
 endif()
 
 set(COPYRIGHT_HOLDERS "The %s developers")
-set(COPYRIGHT_HOLDERS_FINAL "The ${CLIENT_NAME} developers")
-set(CLIENT_BUGREPORT "https://github.com/bitcoin/bitcoin/issues")
+set(COPYRIGHT_HOLDERS_SUBSTITUTION "ElevenSeventyFive Core")
+set(COPYRIGHT_HOLDERS_FINAL "The ${COPYRIGHT_HOLDERS_SUBSTITUTION} developers")
+set(CLIENT_BUGREPORT "https://github.com/1175Dev/1175/issues")
 
 #=============================
 # Language setup

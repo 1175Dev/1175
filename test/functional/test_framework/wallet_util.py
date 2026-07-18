@@ -8,6 +8,7 @@ import unittest
 
 from test_framework.address import (
     byte_to_base58,
+    chain_b58_versions,
     key_to_p2pkh,
     key_to_p2sh_p2wpkh,
     key_to_p2wpkh,
@@ -115,7 +116,9 @@ def test_address(node, address, **kwargs):
 def bytes_to_wif(b, compressed=True):
     if compressed:
         b += b'\x01'
-    return byte_to_base58(b, 240)  # 1175 regtest WIF version (Bitcoin regtest is 239)
+    # 1175 gives each network a distinct WIF version; default regtest (240), but
+    # resolve to the current test network (e.g. signet 176) via address.set_chain().
+    return byte_to_base58(b, chain_b58_versions()["wif"])
 
 def generate_keypair(compressed=True, wif=False):
     """Generate a new random keypair and return the corresponding ECKey /

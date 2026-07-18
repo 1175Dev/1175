@@ -14,7 +14,7 @@ order to maximally raise the difficulty. Verify this using the getmininginfo RPC
 
 """
 
-from test_framework.test_framework import BitcoinTestFramework
+from test_framework.test_framework import BitcoinTestFramework, SkipTest
 from test_framework.util import (
     assert_equal,
 )
@@ -44,6 +44,13 @@ class MiningMainnetTest(BitcoinTestFramework):
         self.num_nodes = 1
         self.setup_clean_chain = True
         self.chain = "" # main
+
+    def skip_test_if_missing_module(self):
+        # This test replays a shipped Bitcoin data file (data/mainnet_alt.json): 2015 blocks
+        # pre-mined at Bitcoin's difficulty-1 target, to exercise difficulty retargeting on
+        # main. A 1175 equivalent would require pre-mining 2015 blocks against 1175's own
+        # mainnet params (infeasible throwaway PoW), and the test did not exist in v25.1.
+        raise SkipTest("no 1175-specific mainnet block data file (data/mainnet_alt.json is Bitcoin-only; regenerating needs infeasible PoW)")
 
     def add_options(self, parser):
         parser.add_argument(

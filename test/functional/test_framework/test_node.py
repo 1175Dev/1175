@@ -49,7 +49,7 @@ BITCOIND_PROC_WAIT_TIMEOUT = 60
 NUM_XOR_BYTES = 8
 # The null blocks key (all 0s)
 NULL_BLK_XOR_KEY = bytes([0] * NUM_XOR_BYTES)
-BITCOIN_PID_FILENAME_DEFAULT = "bitcoind.pid"
+BITCOIN_PID_FILENAME_DEFAULT = "elevenseventyfived.pid"
 
 
 class FailedToStartError(Exception):
@@ -86,7 +86,7 @@ class TestNode():
         self.index = i
         self.p2p_conn_index = 1
         self.datadir_path = datadir_path
-        self.bitcoinconf = self.datadir_path / "bitcoin.conf"
+        self.bitcoinconf = self.datadir_path / "elevenseventyfive.conf"
         self.stdout_dir = self.datadir_path / "stdout"
         self.stderr_dir = self.datadir_path / "stderr"
         self.chain = chain
@@ -106,7 +106,7 @@ class TestNode():
         # Note that common args are set in the config file (see initialize_datadir)
         self.extra_args = extra_args
         self.version = version
-        # Configuration for logging is set as command-line args rather than in the bitcoin.conf file.
+        # Configuration for logging is set as command-line args rather than in the elevenseventyfive.conf file.
         # This means that starting a bitcoind using the temp dir to debug a failed test won't
         # spam debug.log.
         self.args = [
@@ -189,7 +189,21 @@ class TestNode():
     def get_deterministic_priv_key(self):
         """Return a deterministic priv key in base58, that only depends on the node's index"""
         assert len(self.PRIV_KEYS) == MAX_NODES
-        return self.PRIV_KEYS[self.index]
+        key_pair = self.PRIV_KEYS[self.index]
+        # PRIV_KEYS above are regtest-encoded. 1175 gives every network distinct base58
+        # version bytes (unlike upstream, where testnet/signet/regtest share one), so the
+        # regtest WIF/address are rejected on e.g. signet. Re-encode the same key hash and
+        # WIF payload with the node's network version bytes when it isn't regtest.
+        if self.chain != "regtest":
+            from test_framework.address import base58_to_byte, byte_to_base58, CHAIN_B58_VERSIONS
+            versions = CHAIN_B58_VERSIONS["main" if self.chain in ("", "main") else self.chain]
+            keyhash = base58_to_byte(key_pair.address)[0]
+            wif_payload = base58_to_byte(key_pair.key)[0]
+            key_pair = self.AddressKeyPair(
+                byte_to_base58(keyhash, versions["pubkey"]),
+                byte_to_base58(wif_payload, versions["wif"]),
+            )
+        return key_pair
 
     def _node_msg(self, msg: str) -> str:
         """Return a modified msg that identifies this node by its index as a debugging aid."""
@@ -225,7 +239,7 @@ class TestNode():
         # If listening and no -bind is given, then bitcoind would bind P2P ports on
         # 0.0.0.0:P and 127.0.0.1:P+1 (for incoming Tor connections), where P is
         # a unique port chosen by the test framework and configured as port=P in
-        # bitcoin.conf. To avoid collisions, change it to 127.0.0.1:tor_port().
+        # elevenseventyfive.conf. To avoid collisions, change it to 127.0.0.1:tor_port().
         will_listen = all(e != "-nolisten" and e != "-listen=0" for e in extra_args)
         has_explicit_bind = self.has_explicit_bind or any(e.startswith("-bind=") for e in extra_args)
         if will_listen and not has_explicit_bind:
